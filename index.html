@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.54/Build/Cesium/Cesium.js"></script>
+  <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.54/Build/Cesium/Widgets/widgets.css">
+  <link rel="stylesheet" href="style.css">
+  <title>我的求学之路</title>
+  <style>
+    .custom-popup {
+      position: absolute;
+      z-index: 1000;
+      background-color: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px;
+      width: 320px;
+      max-height: 500px;
+      overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      display: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .popup-header h3 {
+      margin: 0;
+      font-size: 18px;
+      color: #333;
+    }
+
+    #closePopup {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #999;
+      padding: 0 4px;
+      transition: color 0.2s;
+    }
+
+    #closePopup:hover {
+      color: #333;
+    }
+
+    .popup-content {
+      color: #666;
+    }
+
+    .popup-content img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      border-radius: 4px;
+      margin: 10px 0;
+      display: block;
+    }
+
+    /* 图片加载错误提示 */
+    .popup-content img[src$="error"] {
+      border: 1px dashed #f44336;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f44336;
+      content: "图片加载失败";
+    }
+
+    .panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 100;
+      max-width: 220px;
+    }
+
+    .panel button {
+      width: 100%;
+      margin-bottom: 5px;
+      padding: 5px;
+      cursor: pointer;
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      transition: all 0.2s;
+    }
+
+    .panel button:hover {
+      background-color: #e0e0e0;
+    }
+
+    .section-title {
+      font-weight: bold;
+      margin-top: 10px;
+      margin-bottom: 5px;
+      padding-top: 5px;
+      border-top: 1px solid #eee;
+    }
+
+    .section-title:first-child {
+      border-top: none;
+      margin-top: 0;
+    }
+
+    #infoPanel {
+      left: auto;
+      right: 10px;
+    }
+
+    #coordinatePanel {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background-color: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 100;
+      max-width: 220px;
+      font-size: 14px;
+    }
+
+    /* 定位状态提示 */
+    .location-status {
+      position: absolute;
+      bottom: 60px;
+      right: 10px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      z-index: 100;
+      font-size: 14px;
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 地图容器 -->
+  <div id="cesiumContainer"></div>
+  <!-- 工具面板 -->
+  <div id="toolbar" class="panel">
+    <div class="section-title">底图切换</div>
+    <button id="streetMap">街道图</button>
+    <button id="satelliteMap">卫星图</button>
+    <button id="terrainMap">地形图</button>
+    <div class="section-title">定位与复位</div>
+    <button id="locate">定位到当前位置</button>
+    <button id="reset">复位到初始视图</button>
+    <div class="section-title">学校导航</div>
+    <button id="btnSchool1">豹山幼儿园</button>
+    <button id="btnSchool2">明伦镇中心小学</button>
+    <button id="btnSchool3">环江县第二小学</button>
+    <button id="btnSchool4">环江县第一中学</button>
+    <button id="btnSchool5">环江县高级中学</button>
+    <button id="btnSchool6">南宁师范大学</button>
+    <!-- 新增学校信息管理模块按钮 -->
+    <div class="section-title">管理功能</div>
+    <button id="schoolManagerBtn">学校信息管理模块</button>
+  </div>
+
+  <!-- 自定义弹窗 -->
+  <div id="customPopup" class="custom-popup">
+    <div class="popup-header">
+      <h3 id="popupTitle"></h3>
+      <button id="closePopup">×</button>
+    </div>
+    <div id="popupContent" class="popup-content"></div>
+  </div>
+
+  <!-- 显示经纬度的面板 -->
+  <div id="coordinatePanel">
+    <div class="section-title">鼠标位置经纬度</div>
+    <p id="coordinateText">暂无数据</p>
+  </div>
+
+  <!-- 定位状态提示 -->
+  <div id="locationStatus" class="location-status"></div>
+
+  <script src="index.js"></script>
+
+  <!-- 在body标签内添加以下内容 -->
+<!-- 登录/注册按钮 -->
+<div id="userMenu" class="user-menu">
+  <button id="userBtn" class="user-btn">登录/注册</button>
+  <div id="userDropdown" class="user-dropdown">
+    <button id="loginBtn">登录</button>
+    <button id="registerBtn">注册</button>
+    <div id="userInfoSection" style="display: none;">
+      <div class="dropdown-divider"></div>
+      <button id="viewProfileBtn">查看资料</button>
+      <button id="editProfileBtn">编辑资料</button>
+      <button id="logoutBtn">退出登录</button>
+    </div>
+  </div>
+</div>
+
+<!-- 登录模态框 -->
+<div id="loginModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal">&times;</span>
+    <h2>用户登录</h2>
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="loginUsername">用户名/邮箱</label>
+        <input type="text" id="loginUsername" required>
+      </div>
+      <div class="form-group">
+        <label for="loginPassword">密码</label>
+        <input type="password" id="loginPassword" required>
+      </div>
+      <div class="error-message" id="loginError"></div>
+      <button type="submit" class="submit-btn">登录</button>
+    </form>
+  </div>
+</div>
+
+<!-- 注册模态框 -->
+<div id="registerModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal">&times;</span>
+    <h2>用户注册</h2>
+    <form id="registerForm">
+      <div class="form-group">
+        <label for="regUsername">用户名</label>
+        <input type="text" id="regUsername" required>
+      </div>
+      <div class="form-group">
+        <label for="regEmail">邮箱</label>
+        <input type="email" id="regEmail" required>
+        <small>请输入有效的邮箱地址</small>
+      </div>
+      <div class="form-group">
+        <label for="regPassword">密码</label>
+        <input type="password" id="regPassword" required>
+        <small>密码至少8位，包含字母和数字</small>
+      </div>
+      <div class="form-group">
+        <label for="regConfirmPassword">确认密码</label>
+        <input type="password" id="regConfirmPassword" required>
+      </div>
+      <div class="error-message" id="registerError"></div>
+      <button type="submit" class="submit-btn">注册</button>
+    </form>
+  </div>
+</div>
+
+<!-- 个人资料模态框 -->
+<div id="profileModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal">&times;</span>
+    <h2>个人资料</h2>
+    <div id="profileContent">
+      <!-- 个人资料内容将通过JS动态填充 -->
+    </div>
+  </div>
+</div>
+
+<!-- 编辑资料模态框 -->
+<div id="editProfileModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal">&times;</span>
+    <h2>编辑个人资料</h2>
+    <form id="editProfileForm">
+      <div class="form-group">
+        <label for="editName">姓名</label>
+        <input type="text" id="editName">
+      </div>
+      <div class="form-group">
+        <label for="editEmail">邮箱</label>
+        <input type="email" id="editEmail">
+      </div>
+      <div class="form-group">
+        <label for="editAvatar">头像上传</label>
+        <input type="file" id="editAvatar" accept="image/*">
+        <img id="avatarPreview" src="" alt="头像预览" style="max-width: 100px; margin-top: 10px; display: none;">
+      </div>
+      <div class="form-group">
+        <label for="editOldPassword">原密码（修改密码时必填）</label>
+        <input type="password" id="editOldPassword">
+      </div>
+      <div class="form-group">
+        <label for="editNewPassword">新密码</label>
+        <input type="password" id="editNewPassword">
+        <small>密码至少8位，包含字母和数字</small>
+      </div>
+      <div class="error-message" id="editProfileError"></div>
+      <button type="submit" class="submit-btn">保存修改</button>
+    </form>
+  </div>
+</div>
+
+<!-- 学校信息管理模态框 -->
+<div id="schoolManagerModal" class="modal">
+  <div class="modal-content large-modal">
+    <span class="close-modal">&times;</span>
+    <h2>学校信息管理</h2>
+    <button id="addSchoolBtn" class="add-btn">添加新学校</button>
+    
+    <div id="schoolsList">
+      <!-- 学校列表将通过JS动态填充 -->
+    </div>
+    
+    <!-- 学校信息编辑表单 -->
+    <div id="schoolFormContainer" style="display: none;">
+      <form id="schoolForm">
+        <input type="hidden" id="schoolId">
+        <div class="form-group">
+          <label for="schoolName">学校名称</label>
+          <input type="text" id="schoolName" required>
+        </div>
+        <div class="form-group">
+          <label for="schoolAddress">地址</label>
+          <input type="text" id="schoolAddress" required>
+        </div>
+        <div class="form-group">
+          <label for="startDate">就读开始时间</label>
+          <input type="date" id="startDate">
+        </div>
+        <div class="form-group">
+          <label for="endDate">就读结束时间</label>
+          <input type="date" id="endDate">
+        </div>
+        <div class="form-group">
+          <label for="schoolType">学校类型</label>
+          <select id="schoolType" required>
+            <option value="">请选择学校类型</option>
+            <option value="kindergarten">幼儿园</option>
+            <option value="primary">小学</option>
+            <option value="junior">初中</option>
+            <option value="senior">高中</option>
+            <option value="college">大学</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="schoolInfo">个人就读信息（年级、班级等）</label>
+          <textarea id="schoolInfo"></textarea>
+        </div>
+        
+        <h3>多媒体信息</h3>
+        <div class="form-group">
+          <label for="schoolEmblem">校徽上传</label>
+          <input type="file" id="schoolEmblem" accept="image/*">
+          <div id="emblemPreviewContainer"></div>
+        </div>
+        
+        <div class="form-group">
+          <label>学校照片</label>
+          <input type="file" id="schoolPhotos" accept="image/*" multiple>
+          <button type="button" id="uploadPhotosBtn">上传照片</button>
+          <div id="photosPreviewContainer" class="photos-grid"></div>
+        </div>
+        
+        <div class="form-group">
+          <label for="schoolVideo">学校视频</label>
+          <input type="file" id="schoolVideo" accept="video/*">
+          <p>或输入视频链接：</p>
+          <input type="url" id="schoolVideoUrl" placeholder="https://...">
+          <div id="videoPreviewContainer"></div>
+        </div>
+        
+        <div class="form-group">
+          <label for="schoolSong">校歌音频</label>
+          <input type="file" id="schoolSong" accept="audio/*">
+          <p>或输入音频链接：</p>
+          <input type="url" id="schoolSongUrl" placeholder="https://...">
+          <div id="audioPreviewContainer"></div>
+        </div>
+        
+        <div class="form-group">
+          <label for="schoolMemories">个人回忆记录</label>
+          <textarea id="schoolMemories" rows="5" placeholder="记录下在这所学校的美好回忆..."></textarea>
+        </div>
+        
+        <div class="error-message" id="schoolFormError"></div>
+        <button type="submit" class="submit-btn">保存学校信息</button>
+        <button type="button" id="cancelSchoolBtn" class="cancel-btn">取消</button>
+      </form>
+    </div>
+  </div>
+</div>
+</body>
+
+</html>
